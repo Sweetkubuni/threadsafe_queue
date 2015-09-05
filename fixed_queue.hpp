@@ -37,7 +37,7 @@ class queue
 	{
 	    std::unique_lock<std::mutex> lk(mutex_end);
 	    if( data[end].dirty )
-            check.wait(lk,[this]()->bool{ front != end;});
+            check.wait(lk,[this]{ return front != end;});
 
         if( !data[end].dirty )
         {
@@ -80,3 +80,4 @@ class queue
             return false;
 	}
 };
+
