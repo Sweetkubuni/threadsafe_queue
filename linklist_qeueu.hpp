@@ -1,62 +1,69 @@
-#include <utility>
-#include <mutex>
-#include <memory>
+/**************************************************************
 
-template<typename T>
-class queue
+    @file : threadsafe_queue.hpp
+
+
+**************************************************************/
+
+#ifndef THREADSAFE_QUEUE_HPP
+#define THREADSAFE_QUEUE_HPP
+#include <memory>
+#include <mutex>
+#include <utility>
+namespace threadsafe
 {
-	private:
-	class node
-	{
-		T val;
-		std::unique_ptr<node> next;
-	};
-	
-	std::mutex mutex_front;
-	std::mutex mutex_end;
-	
-	std::unique_ptr<node> front;
-	node * end;
-	
-	node* get_end()
-	{
-		std::lock_guard<std::mutex> lk(mutex_end);
-		return end;
-	}
-	std::unique_ptr<node> pop_front()
-	{
-		std::lock_guard<std::mutex> lk(mutex_front);
-		if(front.get()==get_end())
-			return nullptr;
-		std::unique_ptr<node> old_front = std::move(front);
-		front = std::move(old_front->next);
-		return old_front;
-	}
-	public:
-	queue():front(new node),end(front.get()) {  }
-	
-	queue(const queue& other)=delete;
-	queue& operator=(const queue& other)=delete;
-	
-	bool pop(T & item)
-	{
-		std::unique_ptr<node> old_front =pop_front();
-		if(old_front)
-		{
-			item = std::move(old_front->val);
-			return true;
-		}
-			
-			return false;
-	}
-	
-	void push(T value )
-	{
-		std::unique_ptr<node> p(new node);
-		const node* new_end=p.get();
-		std::lock_guard<std::mutex> lk(mutex_end);
-		end->val=value;
-		end->next=std::move(p);
-		end=new_end;	
-	}
-};
+    template<typename T>
+    class queue
+    {
+        private:
+        struct node
+        {
+        std::shared_ptr<T> data;
+        std::unique_ptr<node> next;
+        };
+        std::mutex head_mutex;
+        std::unique_ptr<node> head;
+        std::mutex tail_mutex;
+        node* tail;
+        node* get_tail()
+        {
+            std::lock_guard<std::mutex> tail_lock(tail_mutex);
+            return tail;
+        }
+        std::unique_ptr<node> pop_head()
+        {
+            std::lock_guard<std::mutex> head_lock(head_mutex);
+            if(head.get()==get_tail())
+            {
+            return nullptr;
+            }
+            std::unique_ptr<node> old_head=std::move(head);
+            head=std::move(old_head->next);
+            return old_head;
+        }
+    public:
+        queue():head(new node),tail(head.get()){}
+
+        queue(const queue& other)=delete;
+        queue& operator=(const queue& other)=delete;
+
+        std::shared_ptr<T> pop()
+        {
+            std::unique_ptr<node> old_head=pop_head();
+            return old_head?old_head->data:std::shared_ptr<T>();
+        }
+        void push(T * new_value)
+        {
+            std::shared_ptr<T> new_data(new_value);
+            std::unique_ptr<node> p(new node);
+            node* const new_tail=p.get();
+            std::lock_guard<std::mutex> tail_lock(tail_mutex);
+            tail->data=new_data;
+            tail->next=std::move(p);
+            tail=new_tail;
+        }
+    };
+}
+
+#endif // THREADSAFE_QUEUE_HPP
+
